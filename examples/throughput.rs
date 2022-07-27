@@ -1,21 +1,15 @@
-# ringbuffer-spsc
-
-A fast single-producer single-consumer ring buffer.
-For performance reasons, the capacity of the buffer is determined
-at compile time via a const generic and it is required to be a
-power of two for a more efficient index handling.
-
-# Example
-```Rust
 use ringbuffer_spsc::RingBuffer;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 
 fn main() {
-    const N: usize = 1_000_000;
     let (mut tx, mut rx) = RingBuffer::<usize, 16>::new();
+    let counter = Arc::new(AtomicUsize::new(0));
 
-    let p = std::thread::spawn(move || {
+    std::thread::spawn(move || {
         let mut current: usize = 0;
-        while current < N {
+        loop {
             if tx.push(current).is_none() {
                 current = current.wrapping_add(1);
             } else {
@@ -24,19 +18,22 @@ fn main() {
         }
     });
 
-    let c = std::thread::spawn(move || {
+    let c_counter = counter.clone();
+    std::thread::spawn(move || {
         let mut current: usize = 0;
-        while current < N {
+        loop {
             if let Some(c) = rx.pull() {
                 assert_eq!(c, current);
                 current = current.wrapping_add(1);
+                c_counter.fetch_add(1, Ordering::Relaxed);
             } else {
                 std::thread::yield_now();
             }
         }
     });
 
-    p.join().unwrap();
-    c.join().unwrap();
+    loop {
+        std::thread::sleep(Duration::from_secs(1));
+        println!("{} elem/s", counter.swap(0, Ordering::Relaxed));
+    }
 }
-```
