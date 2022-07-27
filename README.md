@@ -6,7 +6,7 @@ at compile time via a const generic and it is required to be a
 power of two for a more efficient index handling.
 
 # Example
-```
+```Rust
 use ringbuffer_spsc::RingBuffer;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
