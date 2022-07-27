@@ -9,7 +9,6 @@ power of two for a more efficient index handling.
 ```Rust
 use ringbuffer_spsc::RingBuffer;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 
 fn main() {
     const N: usize = 1_000_000;
