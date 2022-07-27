@@ -6,7 +6,6 @@
 //! # Example
 //! ```
 //! use ringbuffer_spsc::RingBuffer;
-//! use std::sync::atomic::{AtomicUsize, Ordering};
 //!
 //! fn main() {
 //!     const N: usize = 1_000_000;
@@ -41,11 +40,12 @@
 //! ```
 use cache_padded::CachePadded;
 use std::cell::UnsafeCell;
+use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 pub struct RingBuffer<T, const N: usize> {
-    buffer: UnsafeCell<[Option<T>; N]>,
+    buffer: UnsafeCell<[MaybeUninit<T>; N]>,
     idx_r: CachePadded<AtomicUsize>,
     idx_w: CachePadded<AtomicUsize>,
 }
@@ -61,7 +61,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
             N
         );
         let rb = Arc::new(RingBuffer {
-            buffer: UnsafeCell::new(array_init::array_init(|_| None)),
+            buffer: UnsafeCell::new(array_init::array_init(|_| MaybeUninit::uninit())),
             idx_r: CachePadded::new(AtomicUsize::new(0)),
             idx_w: CachePadded::new(AtomicUsize::new(0)),
         });
@@ -80,7 +80,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
     }
 
     #[inline]
-    unsafe fn get_mut(&self, idx: usize) -> &mut Option<T> {
+    unsafe fn get_mut(&self, idx: usize) -> &mut MaybeUninit<T> {
         // Since N is a power of two, N-1 is a mask covering N
         // elements overflowing when N elements have been added.
         // Indexes are left growing indefinetely and naturally wraps
@@ -112,7 +112,8 @@ impl<T, const N: usize> RingBufferWriter<T, N> {
         }
 
         // Insert the element in the ring buffer
-        *unsafe { self.inner.get_mut(self.local_idx_w) } = Some(t);
+        let mut t = MaybeUninit::new(t);
+        unsafe { std::mem::swap(&mut t, self.inner.get_mut(self.local_idx_w)) };
         // Let's increment the counter and let it grow indefinitely
         // and potentially overflow resetting it to 0.
         self.local_idx_w = self.local_idx_w.wrapping_add(1);
@@ -141,13 +142,14 @@ impl<T, const N: usize> RingBufferReader<T, N> {
             }
         }
         // Remove the element from the ring buffer
-        let t = unsafe { self.inner.get_mut(self.local_idx_r) }.take();
+        let mut t = MaybeUninit::uninit();
+        unsafe { std::mem::swap(&mut t, self.inner.get_mut(self.local_idx_r)) };
         // Let's increment the counter and let it grow indefinitely
         // and potentially overflow resetting it to 0.
         self.local_idx_r = self.local_idx_r.wrapping_add(1);
         self.inner.idx_r.store(self.local_idx_r, Ordering::Release);
 
-        t
+        Some(unsafe { t.assume_init() })
     }
 }
 
