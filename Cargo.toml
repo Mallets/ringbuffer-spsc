@@ -3,6 +3,8 @@ name = "ringbuffer-spsc"
 version = "0.1.0"
 authors = ["Luca Cominardi <luca.cominardi@gmail.com>"]
 edition = "2021"
+description = "A fast single producer-single consumer ring buffer"
+repository = "https://github.com/Mallets/ringbuffer-spsc"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
