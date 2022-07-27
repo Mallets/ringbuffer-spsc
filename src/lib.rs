@@ -112,8 +112,7 @@ impl<T, const N: usize> RingBufferWriter<T, N> {
         }
 
         // Insert the element in the ring buffer
-        let mut t = MaybeUninit::new(t);
-        unsafe { std::mem::swap(&mut t, self.inner.get_mut(self.local_idx_w)) };
+        unsafe { std::mem::replace(self.inner.get_mut(self.local_idx_w), MaybeUninit::new(t)) };
         // Let's increment the counter and let it grow indefinitely
         // and potentially overflow resetting it to 0.
         self.local_idx_w = self.local_idx_w.wrapping_add(1);
@@ -142,14 +141,16 @@ impl<T, const N: usize> RingBufferReader<T, N> {
             }
         }
         // Remove the element from the ring buffer
-        let mut t = MaybeUninit::uninit();
-        unsafe { std::mem::swap(&mut t, self.inner.get_mut(self.local_idx_r)) };
+        let t = unsafe {
+            std::mem::replace(self.inner.get_mut(self.local_idx_r), MaybeUninit::uninit())
+                .assume_init()
+        };
         // Let's increment the counter and let it grow indefinitely
         // and potentially overflow resetting it to 0.
         self.local_idx_r = self.local_idx_r.wrapping_add(1);
         self.inner.idx_r.store(self.local_idx_r, Ordering::Release);
 
-        Some(unsafe { t.assume_init() })
+        Some(t)
     }
 }
 
