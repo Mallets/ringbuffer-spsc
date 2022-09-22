@@ -1,6 +1,6 @@
 [package]
 name = "ringbuffer-spsc"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["Luca Cominardi <luca.cominardi@gmail.com>"]
 edition = "2021"
 description = "A fast single producer-single consumer ring buffer"
