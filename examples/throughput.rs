@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 fn main() {
-    let (mut tx, mut rx) = RingBuffer::<usize, 16>::new();
+    let (mut tx, mut rx) = RingBuffer::<usize, 16>::init();
     let counter = Arc::new(AtomicUsize::new(0));
 
     std::thread::spawn(move || {
