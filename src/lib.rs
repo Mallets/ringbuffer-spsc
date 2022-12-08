@@ -7,36 +7,34 @@
 //! ```
 //! use ringbuffer_spsc::RingBuffer;
 //!
-//! fn main() {
-//!     const N: usize = 1_000_000;
-//!     let (mut tx, mut rx) = RingBuffer::<usize, 16>::new();
+//! const N: usize = 1_000_000;
+//! let (mut tx, mut rx) = RingBuffer::<usize, 16>::init();
 //!
-//!     let p = std::thread::spawn(move || {
-//!         let mut current: usize = 0;
-//!         while current < N {
-//!             if tx.push(current).is_none() {
-//!                 current = current.wrapping_add(1);
-//!             } else {
-//!                 std::thread::yield_now();
-//!             }
+//! let p = std::thread::spawn(move || {
+//!     let mut current: usize = 0;
+//!     while current < N {
+//!         if tx.push(current).is_none() {
+//!             current = current.wrapping_add(1);
+//!         } else {
+//!             std::thread::yield_now();
 //!         }
-//!     });
+//!     }
+//! });
 //!
-//!     let c = std::thread::spawn(move || {
-//!         let mut current: usize = 0;
-//!         while current < N {
-//!             if let Some(c) = rx.pull() {
-//!                 assert_eq!(c, current);
-//!                 current = current.wrapping_add(1);
-//!             } else {
-//!                 std::thread::yield_now();
-//!             }
+//! let c = std::thread::spawn(move || {
+//!     let mut current: usize = 0;
+//!     while current < N {
+//!         if let Some(c) = rx.pull() {
+//!             assert_eq!(c, current);
+//!             current = current.wrapping_add(1);
+//!         } else {
+//!             std::thread::yield_now();
 //!         }
-//!     });
+//!     }
+//! });
 //!
-//!     p.join().unwrap();
-//!     c.join().unwrap();
-//! }
+//! p.join().unwrap();
+//! c.join().unwrap();
 //! ```
 use cache_padded::CachePadded;
 use std::cell::UnsafeCell;
@@ -54,11 +52,10 @@ unsafe impl<T, const N: usize> Send for RingBuffer<T, N> {}
 unsafe impl<T, const N: usize> Sync for RingBuffer<T, N> {}
 
 impl<T, const N: usize> RingBuffer<T, N> {
-    pub fn new() -> (RingBufferWriter<T, N>, RingBufferReader<T, N>) {
+    pub fn init() -> (RingBufferWriter<T, N>, RingBufferReader<T, N>) {
         assert!(
             N.is_power_of_two(),
-            "RingBuffer requires the capacity to be a power of 2. {} is not.",
-            N
+            "RingBuffer requires the capacity to be a power of 2. {N} is not."
         );
         let rb = Arc::new(RingBuffer {
             buffer: UnsafeCell::new(array_init::array_init(|_| MaybeUninit::uninit())),
@@ -79,6 +76,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
         )
     }
 
+    #[allow(clippy::mut_from_ref)]
     #[inline]
     unsafe fn get_mut(&self, idx: usize) -> &mut MaybeUninit<T> {
         // Since N is a power of two, N-1 is a mask covering N
@@ -86,6 +84,21 @@ impl<T, const N: usize> RingBuffer<T, N> {
         // Indexes are left growing indefinetely and naturally wraps
         // around once the index increment reaches usize::MAX.
         &mut (*self.buffer.get())[idx & (N - 1)]
+    }
+}
+
+impl<T, const N: usize> Drop for RingBuffer<T, N> {
+    fn drop(&mut self) {
+        let mut idx_r = self.idx_r.load(Ordering::Acquire);
+        let idx_w = self.idx_w.load(Ordering::Acquire);
+
+        while idx_r != idx_w {
+            let t = unsafe {
+                std::mem::replace(self.get_mut(idx_r), MaybeUninit::uninit()).assume_init()
+            };
+            std::mem::drop(t);
+            idx_r = idx_r.wrapping_add(1);
+        }
     }
 }
 
@@ -161,7 +174,7 @@ mod tests {
     #[test]
     fn it_works() {
         const N: usize = 1_000_000;
-        let (mut tx, mut rx) = RingBuffer::<usize, 16>::new();
+        let (mut tx, mut rx) = RingBuffer::<usize, 16>::init();
 
         let p = std::thread::spawn(move || {
             let mut current: usize = 0;
