@@ -52,6 +52,12 @@ unsafe impl<T, const N: usize> Send for RingBuffer<T, N> {}
 unsafe impl<T, const N: usize> Sync for RingBuffer<T, N> {}
 
 impl<T, const N: usize> RingBuffer<T, N> {
+    #[allow(clippy::new_ret_no_self)]
+    #[deprecated(since = "0.1.8", note = "please use `init()` instead.")]
+    pub fn new() -> (RingBufferWriter<T, N>, RingBufferReader<T, N>) {
+        Self::init()
+    }
+
     pub fn init() -> (RingBufferWriter<T, N>, RingBufferReader<T, N>) {
         assert!(
             N.is_power_of_two(),
