@@ -3,7 +3,7 @@ name = "ringbuffer-spsc"
 version = "0.1.9"
 authors = ["Luca Cominardi <luca.cominardi@gmail.com>"]
 edition = "2021"
-description = "A fast single producer-single consumer ring buffer"
+description = "A fast thread-safe single producer-single consumer ring buffer"
 repository = "https://github.com/Mallets/ringbuffer-spsc"
 license = "EPL-2.0"
 
