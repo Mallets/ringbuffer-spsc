@@ -1,4 +1,4 @@
-//! A fast single-producer single-consumer ring buffer.
+//! A fast thread-safe `no_std` single-producer single-consumer ring buffer.
 //! For performance reasons, the capacity of the buffer is determined
 //! at compile time via a const generic and it is required to be a
 //! power of two for a more efficient index handling.
@@ -36,11 +36,16 @@
 //! p.join().unwrap();
 //! c.join().unwrap();
 //! ```
+#![no_std]
+extern crate alloc;
+
+use alloc::sync::Arc;
 use cache_padded::CachePadded;
-use std::cell::UnsafeCell;
-use std::mem::MaybeUninit;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use core::{
+    cell::UnsafeCell,
+    mem::{self, MaybeUninit},
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 pub struct RingBuffer<T, const N: usize> {
     buffer: UnsafeCell<[MaybeUninit<T>; N]>,
@@ -99,10 +104,9 @@ impl<T, const N: usize> Drop for RingBuffer<T, N> {
         let idx_w = self.idx_w.load(Ordering::Acquire);
 
         while idx_r != idx_w {
-            let t = unsafe {
-                std::mem::replace(self.get_mut(idx_r), MaybeUninit::uninit()).assume_init()
-            };
-            std::mem::drop(t);
+            let t =
+                unsafe { mem::replace(self.get_mut(idx_r), MaybeUninit::uninit()).assume_init() };
+            mem::drop(t);
             idx_r = idx_r.wrapping_add(1);
         }
     }
@@ -131,9 +135,8 @@ impl<T, const N: usize> RingBufferWriter<T, N> {
         }
 
         // Insert the element in the ring buffer
-        unsafe { std::mem::replace(self.inner.get_mut(self.local_idx_w), MaybeUninit::new(t)) };
-        // Let's increment the counter and let it grow indefinitely
-        // and potentially overflow resetting it to 0.
+        unsafe { mem::replace(self.inner.get_mut(self.local_idx_w), MaybeUninit::new(t)) };
+        // Let's increment the counter and let it grow indefinitely and potentially overflow resetting it to 0.
         self.local_idx_w = self.local_idx_w.wrapping_add(1);
         self.inner.idx_w.store(self.local_idx_w, Ordering::Release);
 
@@ -161,8 +164,7 @@ impl<T, const N: usize> RingBufferReader<T, N> {
         }
         // Remove the element from the ring buffer
         let t = unsafe {
-            std::mem::replace(self.inner.get_mut(self.local_idx_r), MaybeUninit::uninit())
-                .assume_init()
+            mem::replace(self.inner.get_mut(self.local_idx_r), MaybeUninit::uninit()).assume_init()
         };
         // Let's increment the counter and let it grow indefinitely
         // and potentially overflow resetting it to 0.
@@ -170,42 +172,5 @@ impl<T, const N: usize> RingBufferReader<T, N> {
         self.inner.idx_r.store(self.local_idx_r, Ordering::Release);
 
         Some(t)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::RingBuffer;
-
-    #[test]
-    fn it_works() {
-        const N: usize = 1_000_000;
-        let (mut tx, mut rx) = RingBuffer::<usize, 16>::init();
-
-        let p = std::thread::spawn(move || {
-            let mut current: usize = 0;
-            while current < N {
-                if tx.push(current).is_none() {
-                    current = current.wrapping_add(1);
-                } else {
-                    std::thread::yield_now();
-                }
-            }
-        });
-
-        let c = std::thread::spawn(move || {
-            let mut current: usize = 0;
-            while current < N {
-                if let Some(c) = rx.pull() {
-                    assert_eq!(c, current);
-                    current = current.wrapping_add(1);
-                } else {
-                    std::thread::yield_now();
-                }
-            }
-        });
-
-        p.join().unwrap();
-        c.join().unwrap();
     }
 }
