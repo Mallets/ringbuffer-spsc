@@ -53,8 +53,6 @@ pub struct RingBuffer<T, const N: usize> {
     idx_w: CachePadded<AtomicUsize>,
 }
 
-unsafe impl<T: Send, const N: usize> Send for RingBuffer<T, N> {}
-
 impl<T, const N: usize> RingBuffer<T, N> {
     #[allow(clippy::new_ret_no_self)]
     #[deprecated(since = "0.1.8", note = "please use `init()` instead.")]
@@ -118,6 +116,8 @@ pub struct RingBufferWriter<T, const N: usize> {
     local_idx_w: usize,
 }
 
+unsafe impl<T: Send, const N: usize> Send for RingBufferWriter<T, N> {}
+
 impl<T, const N: usize> RingBufferWriter<T, N> {
     /// Push an element into the RingBuffer.
     /// It returns `Some(T)` if the RingBuffer is full, giving back the ownership of `T`.
@@ -160,6 +160,8 @@ pub struct RingBufferReader<T, const N: usize> {
     local_idx_r: usize,
     cached_idx_w: usize,
 }
+
+unsafe impl<T: Send, const N: usize> Send for RingBufferReader<T, N> {}
 
 impl<T, const N: usize> RingBufferReader<T, N> {
     /// Pull an element from the RingBuffer.
