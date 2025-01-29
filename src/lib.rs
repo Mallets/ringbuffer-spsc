@@ -63,6 +63,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
         Self::init()
     }
 
+    /// Initialize the RingBuffer with the given capacity
     pub fn init() -> (RingBufferWriter<T, N>, RingBufferReader<T, N>) {
         assert!(
             N.is_power_of_two(),
@@ -119,19 +120,13 @@ pub struct RingBufferWriter<T, const N: usize> {
 }
 
 impl<T, const N: usize> RingBufferWriter<T, N> {
+    /// Push an element into the RingBuffer.
+    /// It returns `Some(T)` if the RingBuffer is full, giving back the ownership of `T`.
     #[inline]
     pub fn push(&mut self, t: T) -> Option<T> {
-        // Check if the ring buffer is potentially full.
-        // This happens when the difference between the write and read indexes equals
-        // the ring buffer capacity. Note that the write and read indexes are left growing
-        // indefinitely, so we need to compute the difference by accounting for any eventual
-        // overflow. This requires wrapping the subtraction operation.
-        if self.local_idx_w.wrapping_sub(self.cached_idx_r) == N {
-            self.cached_idx_r = self.inner.idx_r.load(Ordering::Acquire);
-            // Check if the ring buffer is really full
-            if self.local_idx_w.wrapping_sub(self.cached_idx_r) == N {
-                return Some(t);
-            }
+        // Check if the ring buffer is full.
+        if self.is_full() {
+            return Some(t);
         }
 
         // Insert the element in the ring buffer
@@ -142,6 +137,23 @@ impl<T, const N: usize> RingBufferWriter<T, N> {
 
         None
     }
+
+    /// Check if the RingBuffer is full and evenutally updates the internal cached indexes.
+    #[inline]
+    pub fn is_full(&mut self) -> bool {
+        // Check if the ring buffer is potentially full.
+        // This happens when the difference between the write and read indexes equals
+        // the ring buffer capacity. Note that the write and read indexes are left growing
+        // indefinitely, so we need to compute the difference by accounting for any eventual
+        // overflow. This requires wrapping the subtraction operation.
+        if self.local_idx_w.wrapping_sub(self.cached_idx_r) == N {
+            self.cached_idx_r = self.inner.idx_r.load(Ordering::Acquire);
+            // Check if the ring buffer is really full
+            self.local_idx_w.wrapping_sub(self.cached_idx_r) == N
+        } else {
+            false
+        }
+    }
 }
 
 pub struct RingBufferReader<T, const N: usize> {
@@ -151,17 +163,15 @@ pub struct RingBufferReader<T, const N: usize> {
 }
 
 impl<T, const N: usize> RingBufferReader<T, N> {
+    /// Pull an element from the RingBuffer.
+    /// It returns `None` if the RingBuffer is empty.
     #[inline]
     pub fn pull(&mut self) -> Option<T> {
         // Check if the ring buffer is potentially empty
-        if self.local_idx_r == self.cached_idx_w {
-            // Update the write index
-            self.cached_idx_w = self.inner.idx_w.load(Ordering::Acquire);
-            // Check if the ring buffer is really empty
-            if self.local_idx_r == self.cached_idx_w {
-                return None;
-            }
+        if self.is_empty() {
+            return None;
         }
+
         // Remove the element from the ring buffer
         let t = unsafe {
             mem::replace(self.inner.get_mut(self.local_idx_r), MaybeUninit::uninit()).assume_init()
@@ -172,5 +182,19 @@ impl<T, const N: usize> RingBufferReader<T, N> {
         self.inner.idx_r.store(self.local_idx_r, Ordering::Release);
 
         Some(t)
+    }
+
+    /// Check if the RingBuffer is empty and evenutally updates the internal cached indexes.
+    #[inline]
+    pub fn is_empty(&mut self) -> bool {
+        // Check if the ring buffer is potentially empty
+        if self.local_idx_r == self.cached_idx_w {
+            // Update the write index
+            self.cached_idx_w = self.inner.idx_w.load(Ordering::Acquire);
+            // Check if the ring buffer is really empty
+            self.local_idx_r == self.cached_idx_w
+        } else {
+            false
+        }
     }
 }
