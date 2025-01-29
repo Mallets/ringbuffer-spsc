@@ -40,12 +40,12 @@
 extern crate alloc;
 
 use alloc::sync::Arc;
-use cache_padded::CachePadded;
 use core::{
     cell::UnsafeCell,
     mem::{self, MaybeUninit},
     sync::atomic::{AtomicUsize, Ordering},
 };
+use crossbeam::utils::CachePadded;
 
 pub struct RingBuffer<T, const N: usize> {
     buffer: UnsafeCell<[MaybeUninit<T>; N]>,
@@ -135,7 +135,7 @@ impl<T, const N: usize> RingBufferWriter<T, N> {
         }
 
         // Insert the element in the ring buffer
-        unsafe { mem::replace(self.inner.get_mut(self.local_idx_w), MaybeUninit::new(t)) };
+        let _ = unsafe { mem::replace(self.inner.get_mut(self.local_idx_w), MaybeUninit::new(t)) };
         // Let's increment the counter and let it grow indefinitely and potentially overflow resetting it to 0.
         self.local_idx_w = self.local_idx_w.wrapping_add(1);
         self.inner.idx_w.store(self.local_idx_w, Ordering::Release);
