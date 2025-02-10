@@ -117,6 +117,7 @@ pub struct RingBufferWriter<T, const N: usize> {
 }
 
 unsafe impl<T: Send, const N: usize> Send for RingBufferWriter<T, N> {}
+unsafe impl<T: Sync, const N: usize> Sync for RingBufferWriter<T, N> {}
 
 impl<T, const N: usize> RingBufferWriter<T, N> {
     /// Push an element into the RingBuffer.
@@ -162,6 +163,7 @@ pub struct RingBufferReader<T, const N: usize> {
 }
 
 unsafe impl<T: Send, const N: usize> Send for RingBufferReader<T, N> {}
+unsafe impl<T: Sync, const N: usize> Sync for RingBufferReader<T, N> {}
 
 impl<T, const N: usize> RingBufferReader<T, N> {
     /// Pull an element from the RingBuffer.
