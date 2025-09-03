@@ -1,11 +1,12 @@
 use ringbuffer_spsc::RingBuffer;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
+use std::{
+    sync::atomic::{AtomicUsize, Ordering},
+    time::{Duration, Instant},
+};
 
 fn main() {
-    let (mut tx, mut rx) = RingBuffer::<usize, 16>::init();
-    let counter = Arc::new(AtomicUsize::new(0));
+    let (mut tx, mut rx) = RingBuffer::<usize, 1_024>::init();
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     std::thread::spawn(move || {
         let mut current: usize = 0;
@@ -18,22 +19,23 @@ fn main() {
         }
     });
 
-    let c_counter = counter.clone();
     std::thread::spawn(move || {
         let mut current: usize = 0;
         loop {
             if let Some(c) = rx.pull() {
-                assert_eq!(c, current);
+                debug_assert_eq!(c, current);
                 current = current.wrapping_add(1);
-                c_counter.fetch_add(1, Ordering::Relaxed);
+                COUNTER.fetch_add(1, Ordering::Relaxed);
             } else {
                 std::thread::yield_now();
             }
         }
     });
 
-    loop {
-        std::thread::sleep(Duration::from_secs(1));
-        println!("{} elem/s", counter.swap(0, Ordering::Relaxed));
+    let start = Instant::now();
+    let step = Duration::from_secs(1);
+    for i in 1..=u32::MAX {
+        std::thread::sleep(start + i * step - Instant::now());
+        println!("{} elem/s", COUNTER.swap(0, Ordering::Relaxed));
     }
 }
