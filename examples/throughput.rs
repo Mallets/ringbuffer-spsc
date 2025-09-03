@@ -5,37 +5,27 @@ use std::{
 };
 
 fn main() {
-    let (mut tx, mut rx) = RingBuffer::<usize, 1_024>::init();
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let (mut tx, mut rx) = RingBuffer::<usize, 1_024>::init();
 
-    std::thread::spawn(move || {
-        let mut current: usize = 0;
-        loop {
-            if tx.push(current).is_none() {
-                current = current.wrapping_add(1);
-            } else {
-                std::thread::yield_now();
-            }
+    std::thread::spawn(move || loop {
+        if tx.push(1).is_some() {
+            std::thread::yield_now();
         }
     });
 
-    std::thread::spawn(move || {
-        let mut current: usize = 0;
-        loop {
-            if let Some(c) = rx.pull() {
-                debug_assert_eq!(c, current);
-                current = current.wrapping_add(1);
-                COUNTER.fetch_add(1, Ordering::Relaxed);
-            } else {
-                std::thread::yield_now();
-            }
+    std::thread::spawn(move || loop {
+        if rx.pull().is_some() {
+            COUNTER.fetch_add(1, Ordering::Relaxed);
+        } else {
+            std::thread::yield_now();
         }
     });
 
+    static STEP: Duration = Duration::from_secs(1);
     let start = Instant::now();
-    let step = Duration::from_secs(1);
     for i in 1..=u32::MAX {
-        std::thread::sleep(start + i * step - Instant::now());
+        std::thread::sleep(start + i * STEP - Instant::now());
         println!("{} elem/s", COUNTER.swap(0, Ordering::Relaxed));
     }
 }
