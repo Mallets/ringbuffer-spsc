@@ -64,7 +64,7 @@ impl<T, const N: usize> RingBuffer<T, N> {
     pub fn init() -> (RingBufferWriter<T, N>, RingBufferReader<T, N>) {
         assert!(
             N.is_power_of_two(),
-            "RingBuffer requires the capacity to be a power of 2. {N} is not."
+            "RingBuffer requires the capacity to be a power of 2: {N} is not."
         );
         let rb = Arc::new(RingBuffer {
             buffer: UnsafeCell::new(array_init::array_init(|_| MaybeUninit::uninit())),
