@@ -3,7 +3,7 @@ use ringbuffer_spsc::RingBuffer;
 #[test]
 fn it_works() {
     const N: usize = 1_000_000;
-    let (mut tx, mut rx) = RingBuffer::<usize, 16>::init();
+    let (mut tx, mut rx) = RingBuffer::<usize>::new(16);
 
     let p = std::thread::spawn(move || {
         let mut current: usize = 0;
@@ -19,7 +19,11 @@ fn it_works() {
     let c = std::thread::spawn(move || {
         let mut current: usize = 0;
         while current < N {
-            if let Some(c) = rx.pull() {
+            if let Some(c) = rx.peek() {
+                assert_eq!(*c, current);
+                let c = rx.peek_mut().unwrap();
+                assert_eq!(*c, current);
+                let c = rx.pull().unwrap();
                 assert_eq!(c, current);
                 current = current.wrapping_add(1);
             } else {

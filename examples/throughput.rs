@@ -6,7 +6,7 @@ use std::{
 
 fn main() {
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
-    let (mut tx, mut rx) = RingBuffer::<usize, 1_024>::init();
+    let (mut tx, mut rx) = RingBuffer::<usize>::new(1_024);
 
     std::thread::spawn(move || loop {
         if tx.push(1).is_some() {
