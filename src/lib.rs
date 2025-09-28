@@ -44,56 +44,50 @@ use core::{
     mem::{self, MaybeUninit},
     sync::atomic::{AtomicUsize, Ordering},
 };
-use crossbeam::utils::CachePadded;
+use crossbeam_utils::CachePadded;
 
-pub struct RingBuffer<T> {
-    ptr: *const MaybeUninit<T>,
-    capacity: usize,
+/// Panic: it panics if capacity is not a power of 2.
+pub fn ringbuffer<T>(exp: u32) -> (RingBufferWriter<T>, RingBufferReader<T>) {
+    let capacity: usize = 2_usize.pow(exp);
+    // Inner container
+    let v = (0..capacity)
+        .map(|_| MaybeUninit::uninit())
+        .collect::<Vec<_>>()
+        .into_boxed_slice();
+
+    let rb = Arc::new(RingBuffer {
+        // Keep
+        ptr: Box::into_raw(v),
+        // Since capacity is a power of two, capacity-1 is a mask covering N elements overflowing when N elements have been added.
+        // Indexes are left growing indefinetely and naturally wraps around once the index increment reaches usize::MAX.
+        mask: capacity - 1,
+        idx_r: CachePadded::new(AtomicUsize::new(0)),
+        idx_w: CachePadded::new(AtomicUsize::new(0)),
+    });
+    (
+        RingBufferWriter {
+            inner: rb.clone(),
+            cached_idx_r: 0,
+            local_idx_w: 0,
+        },
+        RingBufferReader {
+            inner: rb,
+            local_idx_r: 0,
+            cached_idx_w: 0,
+        },
+    )
+}
+
+struct RingBuffer<T> {
+    ptr: *mut [MaybeUninit<T>],
     mask: usize,
     idx_r: CachePadded<AtomicUsize>,
     idx_w: CachePadded<AtomicUsize>,
 }
 
 impl<T> RingBuffer<T> {
-    pub fn new(capacity: usize) -> (RingBufferWriter<T>, RingBufferReader<T>) {
-        assert!(
-            capacity.is_power_of_two(),
-            "RingBuffer requires the capacity to be a power of 2: {capacity} is not."
-        );
-        let v = (0..capacity)
-            .map(|_| MaybeUninit::uninit())
-            .collect::<Vec<_>>();
-        let ptr = Box::leak(v.into_boxed_slice()).as_ptr();
-
-        // Since capacity is a power of two, capacity-1 is a mask covering N elements overflowing when N elements have been added.
-        // Indexes are left growing indefinetely and naturally wraps around once the index increment reaches usize::MAX.
-        let mask = capacity - 1;
-
-        let rb = Arc::new(RingBuffer {
-            ptr,
-            capacity,
-            mask,
-            idx_r: CachePadded::new(AtomicUsize::new(0)),
-            idx_w: CachePadded::new(AtomicUsize::new(0)),
-        });
-        (
-            RingBufferWriter {
-                inner: rb.clone(),
-                cached_idx_r: 0,
-                local_idx_w: 0,
-            },
-            RingBufferReader {
-                inner: rb,
-                local_idx_r: 0,
-                cached_idx_w: 0,
-            },
-        )
-    }
-
-    #[allow(clippy::mut_from_ref)]
-    #[inline]
-    fn get_mut(&self, idx: usize) -> &mut MaybeUninit<T> {
-        unsafe { &mut (*(self.ptr.add(idx & self.mask) as *mut MaybeUninit<T>)) }
+    unsafe fn get_unchecked_mut(&self, idx: usize) -> &mut MaybeUninit<T> {
+        unsafe { (&mut (*self.ptr)).get_unchecked_mut(idx & self.mask) }
     }
 }
 
@@ -103,11 +97,15 @@ impl<T> Drop for RingBuffer<T> {
         let idx_w = self.idx_w.load(Ordering::Acquire);
 
         while idx_r != idx_w {
-            let t =
-                unsafe { mem::replace(self.get_mut(idx_r), MaybeUninit::uninit()).assume_init() };
+            let t = unsafe {
+                mem::replace(self.get_unchecked_mut(idx_r), MaybeUninit::uninit()).assume_init()
+            };
             mem::drop(t);
             idx_r = idx_r.wrapping_add(1);
         }
+
+        let ptr = unsafe { Box::from_raw(self.ptr) };
+        mem::drop(ptr);
     }
 }
 
@@ -121,6 +119,11 @@ unsafe impl<T: Send> Send for RingBufferWriter<T> {}
 unsafe impl<T: Sync> Sync for RingBufferWriter<T> {}
 
 impl<T> RingBufferWriter<T> {
+    // Returns the capacity of the ringbuffer
+    pub fn capacity(&self) -> usize {
+        self.inner.ptr.len()
+    }
+
     /// Push an element into the RingBuffer.
     /// It returns `Some(T)` if the RingBuffer is full, giving back the ownership of `T`.
     #[inline]
@@ -131,7 +134,11 @@ impl<T> RingBufferWriter<T> {
         }
 
         // Insert the element in the ring buffer
-        let _ = mem::replace(self.inner.get_mut(self.local_idx_w), MaybeUninit::new(t));
+        let _ = mem::replace(
+            unsafe { self.inner.get_unchecked_mut(self.local_idx_w) },
+            MaybeUninit::new(t),
+        );
+
         // Let's increment the counter and let it grow indefinitely and potentially overflow resetting it to 0.
         self.local_idx_w = self.local_idx_w.wrapping_add(1);
         self.inner.idx_w.store(self.local_idx_w, Ordering::Release);
@@ -147,10 +154,10 @@ impl<T> RingBufferWriter<T> {
         // the ring buffer capacity. Note that the write and read indexes are left growing
         // indefinitely, so we need to compute the difference by accounting for any eventual
         // overflow. This requires wrapping the subtraction operation.
-        if self.local_idx_w.wrapping_sub(self.cached_idx_r) == self.inner.capacity {
+        if self.local_idx_w.wrapping_sub(self.cached_idx_r) == self.inner.ptr.len() {
             self.cached_idx_r = self.inner.idx_r.load(Ordering::Acquire);
             // Check if the ring buffer is really full
-            self.local_idx_w.wrapping_sub(self.cached_idx_r) == self.inner.capacity
+            self.local_idx_w.wrapping_sub(self.cached_idx_r) == self.inner.ptr.len()
         } else {
             false
         }
@@ -167,6 +174,11 @@ unsafe impl<T: Send> Send for RingBufferReader<T> {}
 unsafe impl<T: Sync> Sync for RingBufferReader<T> {}
 
 impl<T> RingBufferReader<T> {
+    // Returns the capacity of the ringbuffer
+    pub fn capacity(&self) -> usize {
+        self.inner.ptr.len()
+    }
+
     /// Pull an element from the RingBuffer.
     /// It returns `None` if the RingBuffer is empty.
     #[inline]
@@ -178,7 +190,11 @@ impl<T> RingBufferReader<T> {
 
         // Remove the element from the ring buffer
         let t = unsafe {
-            mem::replace(self.inner.get_mut(self.local_idx_r), MaybeUninit::uninit()).assume_init()
+            mem::replace(
+                self.inner.get_unchecked_mut(self.local_idx_r),
+                MaybeUninit::uninit(),
+            )
+            .assume_init()
         };
         // Let's increment the counter and let it grow indefinitely
         // and potentially overflow resetting it to 0.
@@ -191,25 +207,33 @@ impl<T> RingBufferReader<T> {
     /// Peek an element from the RingBuffer without pulling it out.
     /// It returns `None` if the RingBuffer is empty.
     #[inline]
-    pub fn peek<'a>(&'a mut self) -> Option<&'a T> {
+    pub fn peek(&mut self) -> Option<&T> {
         // Check if the ring buffer is potentially empty
         if self.is_empty() {
             return None;
         }
 
-        Some(unsafe { self.inner.get_mut(self.local_idx_r).assume_init_ref() })
+        Some(unsafe {
+            self.inner
+                .get_unchecked_mut(self.local_idx_r)
+                .assume_init_ref()
+        })
     }
 
     /// Peek a mutable element from the RingBuffer without pulling it out.
     /// It returns `None` if the RingBuffer is empty.
     #[inline]
-    pub fn peek_mut<'a>(&'a mut self) -> Option<&'a mut T> {
+    pub fn peek_mut(&mut self) -> Option<&mut T> {
         // Check if the ring buffer is potentially empty
         if self.is_empty() {
             return None;
         }
 
-        Some(unsafe { self.inner.get_mut(self.local_idx_r).assume_init_mut() })
+        Some(unsafe {
+            self.inner
+                .get_unchecked_mut(self.local_idx_r)
+                .assume_init_mut()
+        })
     }
 
     /// Check if the RingBuffer is empty and evenutally updates the internal cached indexes.

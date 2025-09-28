@@ -1,9 +1,9 @@
-use ringbuffer_spsc::RingBuffer;
+use ringbuffer_spsc::ringbuffer;
 
 #[test]
 fn it_works() {
     const N: usize = 1_000_000;
-    let (mut tx, mut rx) = RingBuffer::<usize>::new(16);
+    let (mut tx, mut rx) = ringbuffer::<usize>(16);
 
     let p = std::thread::spawn(move || {
         let mut current: usize = 0;
@@ -34,4 +34,15 @@ fn it_works() {
 
     p.join().unwrap();
     c.join().unwrap();
+}
+
+#[test]
+fn memcheck() {
+    const N: u32 = 4;
+    let (mut tx, rx) = ringbuffer::<Box<usize>>(N);
+    for i in 0..2_usize.pow(N) {
+        assert!(tx.push(Box::new(i)).is_none());
+    }
+    drop(tx);
+    drop(rx);
 }

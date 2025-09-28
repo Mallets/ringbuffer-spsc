@@ -1,4 +1,4 @@
-use ringbuffer_spsc::RingBuffer;
+use ringbuffer_spsc::ringbuffer;
 use std::{
     sync::atomic::{AtomicUsize, Ordering},
     time::{Duration, Instant},
@@ -6,7 +6,7 @@ use std::{
 
 fn main() {
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
-    let (mut tx, mut rx) = RingBuffer::<usize>::new(1_024);
+    let (mut tx, mut rx) = ringbuffer::<usize>(10);
 
     std::thread::spawn(move || loop {
         if tx.push(1).is_some() {
