@@ -6,6 +6,7 @@ edition = "2021"
 description = "A fast thread-safe single producer-single consumer ring buffer"
 repository = "https://github.com/Mallets/ringbuffer-spsc"
 license = "EPL-2.0 OR Apache-2.0"
+rust-version = "1.79"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
