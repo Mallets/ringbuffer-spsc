@@ -3,6 +3,7 @@ use ringbuffer_spsc::ringbuffer;
 #[test]
 fn it_works() {
     const N: usize = 1_000_000;
+
     let (mut tx, mut rx) = ringbuffer::<usize>(16);
 
     let p = std::thread::spawn(move || {
@@ -38,11 +39,14 @@ fn it_works() {
 
 #[test]
 fn memcheck() {
-    const N: u32 = 4;
+    const N: usize = 4;
+
     let (mut tx, rx) = ringbuffer::<Box<usize>>(N);
-    for i in 0..2_usize.pow(N) {
+    for i in 0..N {
         assert!(tx.push(Box::new(i)).is_none());
     }
+    assert!(tx.push(Box::new(N)).is_some());
+
     drop(tx);
     drop(rx);
 }

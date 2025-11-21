@@ -47,8 +47,8 @@ use core::{
 use crossbeam_utils::CachePadded;
 
 /// Panic: it panics if capacity is not a power of 2.
-pub fn ringbuffer<T>(exp: u32) -> (RingBufferWriter<T>, RingBufferReader<T>) {
-    let capacity: usize = 2_usize.pow(exp);
+pub fn ringbuffer<T>(capacity: usize) -> (RingBufferWriter<T>, RingBufferReader<T>) {
+    assert!(capacity.is_power_of_two(), "Capacity must be a power of 2");
     // Inner container
     let v = (0..capacity)
         .map(|_| MaybeUninit::uninit())
