@@ -56,10 +56,10 @@ pub fn ringbuffer<T>(capacity: usize) -> (RingBufferWriter<T>, RingBufferReader<
         .into_boxed_slice();
 
     let rb = Arc::new(RingBuffer {
-        // Keep
+        // Keep the pointer to the boxed slice
         ptr: Box::into_raw(v),
         // Since capacity is a power of two, capacity-1 is a mask covering N elements overflowing when N elements have been added.
-        // Indexes are left growing indefinetely and naturally wraps around once the index increment reaches usize::MAX.
+        // Indexes are left growing indefinetely and naturally wrap around once the index increment reaches usize::MAX.
         mask: capacity - 1,
         idx_r: CachePadded::new(AtomicUsize::new(0)),
         idx_w: CachePadded::new(AtomicUsize::new(0)),
