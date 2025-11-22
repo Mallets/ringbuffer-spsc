@@ -86,4 +86,5 @@ jobs:
         run: cargo machete
 
       - name: Check TOML formatting (taplo)
+        if: ${{ !contains(matrix.os, 'windows') }}
         run: taplo fmt --check --diff
