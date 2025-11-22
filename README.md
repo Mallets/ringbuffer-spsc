@@ -1,3 +1,8 @@
+[![CI](https://github.com/Mallets/ringbuffer-spsc/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mallets/ringbuffer-spsc/actions?query=workflow%3ACI+branch%3Amain++)
+[![docs.rs](https://img.shields.io/docsrs/ringbuffer-spsc)](https://docs.rs/ringbuffer-spsc/latest/ringbuffer_spsc/)
+[![License](https://img.shields.io/badge/License-EPL%202.0-blue)](https://choosealicense.com/licenses/epl-2.0/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 # ringbuffer-spsc
 
 A fast single-producer single-consumer ring buffer.
@@ -48,7 +53,7 @@ fn main() {
 Tests run on an Apple M4, 32 GB of RAM.
 
 ```sh
-$ cargo run --release --example throughput
+cargo run --release --example throughput
 ```
 
 Provides `~520M elem/s` of sustained throughput.
