@@ -5,10 +5,10 @@
 //!
 //! # Example
 //! ```rust
-//! use ringbuffer_spsc::RingBuffer;
+//! use ringbuffer_spsc::ringbuffer;
 //!
 //! const N: usize = 1_000_000;
-//! let (mut tx, mut rx) = RingBuffer::<usize>::new(16);
+//! let (mut tx, mut rx) = ringbuffer::<usize>(16);
 //!
 //! let p = std::thread::spawn(move || {
 //!     let mut current: usize = 0;
@@ -49,6 +49,7 @@ use crossbeam_utils::CachePadded;
 /// Panic: it panics if capacity is not a power of 2.
 pub fn ringbuffer<T>(capacity: usize) -> (RingBufferWriter<T>, RingBufferReader<T>) {
     assert!(capacity.is_power_of_two(), "Capacity must be a power of 2");
+
     // Inner container
     let v = (0..capacity)
         .map(|_| MaybeUninit::uninit())
@@ -56,10 +57,10 @@ pub fn ringbuffer<T>(capacity: usize) -> (RingBufferWriter<T>, RingBufferReader<
         .into_boxed_slice();
 
     let rb = Arc::new(RingBuffer {
-        // Keep
+        // Keep the pointer to the boxed slice
         ptr: Box::into_raw(v),
         // Since capacity is a power of two, capacity-1 is a mask covering N elements overflowing when N elements have been added.
-        // Indexes are left growing indefinetely and naturally wraps around once the index increment reaches usize::MAX.
+        // Indexes are left growing indefinetely and naturally wrap around once the index increment reaches usize::MAX.
         mask: capacity - 1,
         idx_r: CachePadded::new(AtomicUsize::new(0)),
         idx_w: CachePadded::new(AtomicUsize::new(0)),
@@ -86,6 +87,7 @@ struct RingBuffer<T> {
 }
 
 impl<T> RingBuffer<T> {
+    #[allow(clippy::mut_from_ref)]
     unsafe fn get_unchecked_mut(&self, idx: usize) -> &mut MaybeUninit<T> {
         unsafe { (&mut (*self.ptr)).get_unchecked_mut(idx & self.mask) }
     }
