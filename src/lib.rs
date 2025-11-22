@@ -86,6 +86,7 @@ struct RingBuffer<T> {
 }
 
 impl<T> RingBuffer<T> {
+    #[allow(clippy::mut_from_ref)]
     unsafe fn get_unchecked_mut(&self, idx: usize) -> &mut MaybeUninit<T> {
         unsafe { (&mut (*self.ptr)).get_unchecked_mut(idx & self.mask) }
     }
