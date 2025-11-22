@@ -2,6 +2,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Mallets/ringbuffer-spsc/ci.yaml?branch=main)](https://github.com/Mallets/ringbuffer-spsc/actions?query=workflow:CI+branch:main)
 [![docs.rs](https://img.shields.io/docsrs/ringbuffer-spsc)](https://docs.rs/ringbuffer-spsc/latest/ringbuffer_spsc/)
+[![Release](https://img.shields.io/crates/v/ringbuffer-spsc)](https://crates.io/crates/ringbuffer-spsc)
 [![License](https://img.shields.io/badge/License-EPL%202.0-blue)](https://choosealicense.com/licenses/epl-2.0/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
