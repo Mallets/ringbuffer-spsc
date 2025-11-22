@@ -5,10 +5,10 @@
 //!
 //! # Example
 //! ```rust
-//! use ringbuffer_spsc::RingBuffer;
+//! use ringbuffer_spsc::ringbuffer;
 //!
 //! const N: usize = 1_000_000;
-//! let (mut tx, mut rx) = RingBuffer::<usize>::new(16);
+//! let (mut tx, mut rx) = ringbuffer::<usize>(16);
 //!
 //! let p = std::thread::spawn(move || {
 //!     let mut current: usize = 0;
@@ -49,6 +49,7 @@ use crossbeam_utils::CachePadded;
 /// Panic: it panics if capacity is not a power of 2.
 pub fn ringbuffer<T>(capacity: usize) -> (RingBufferWriter<T>, RingBufferReader<T>) {
     assert!(capacity.is_power_of_two(), "Capacity must be a power of 2");
+
     // Inner container
     let v = (0..capacity)
         .map(|_| MaybeUninit::uninit())
