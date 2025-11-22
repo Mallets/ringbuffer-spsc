@@ -1,6 +1,5 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use ringbuffer_spsc::ringbuffer;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 // Elements arrive in order
 #[test]
