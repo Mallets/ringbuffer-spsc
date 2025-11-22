@@ -1,5 +1,8 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use ringbuffer_spsc::ringbuffer;
 
+// Elements arrive in order
 #[test]
 fn it_works() {
     const N: usize = 1_000_000;
@@ -37,16 +40,47 @@ fn it_works() {
     c.join().unwrap();
 }
 
+// Memory drop check
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+struct DropCounter;
+
+impl DropCounter {
+    fn new() -> Self {
+        COUNTER.fetch_add(1, Ordering::SeqCst);
+        Self
+    }
+}
+
+impl Drop for DropCounter {
+    fn drop(&mut self) {
+        COUNTER.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 #[test]
 fn memcheck() {
-    const N: usize = 4;
+    const N: usize = 1_024;
 
-    let (mut tx, rx) = ringbuffer::<Box<usize>>(N);
-    for i in 0..N {
-        assert!(tx.push(Box::new(i)).is_none());
+    let (mut tx, rx) = ringbuffer::<DropCounter>(N);
+    for _ in 0..N {
+        assert!(tx.push(DropCounter::new()).is_none());
     }
-    assert!(tx.push(Box::new(N)).is_some());
+    assert!(tx.push(DropCounter::new()).is_some());
 
+    assert_eq!(
+        COUNTER.load(Ordering::SeqCst),
+        N,
+        "There should be as many counters as ringbuffer capacity"
+    );
+
+    // Drop both reader and writer
     drop(tx);
     drop(rx);
+
+    assert_eq!(
+        COUNTER.load(Ordering::SeqCst),
+        0,
+        "All the drop counters should have been dropped"
+    );
 }
