@@ -18,12 +18,12 @@ use ringbuffer_spsc::ringbuffer;
 
 fn main() {
     // Create a writer/reader pair
-    let (mut tx, mut rx) = ringbuffer::<usize>(16);
+    let (mut writer, mut reader) = ringbuffer::<usize>(16);
 
     // Thread that pushes elements on the ringbuffer
     std::thread::spawn(move || for i in 0..usize::MAX {
         // Attempt to push an element
-        if tx.push(i).is_some() {
+        if writer.push(i).is_some() {
             // The ringbuffer is full, yield the thread
             std::thread::yield_now();
         }
@@ -31,7 +31,7 @@ fn main() {
 
     // Loop that pulls elements from the ringbuffer
     loop {
-        match rx.pull() {
+        match reader.pull() {
             // We have got an element, do something
             Some(t) => std::hint::blackbox(t),
             // The ringbuffer is empty, yield the thread
