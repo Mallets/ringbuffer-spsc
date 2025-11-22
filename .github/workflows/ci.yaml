@@ -22,9 +22,54 @@ jobs:
         run: rustup update stable
 
       - name: Make sure necessary tools are installed
-        run: |
-          rustup component add clippy --toolchain stable
-          rustup component add rustfmt --toolchain stable
+        run: rustup component add clippy --toolchain stable
+
+      - name: Setup rust-cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
+
+      - name: Run cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Check formatting (cargo fmt)
+        run: cargo fmt --all --check
+
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup update stable
+
+      - name: Setup rust-cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
+
+      - name: Run cargo test
+        run: cargo test --all-features
+
+  toml:
+    name: Format (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup update stable
 
       - name: Setup rust-cache
         uses: Swatinem/rust-cache@v2
@@ -37,11 +82,30 @@ jobs:
       - name: Install latest taplo
         uses: taiki-e/install-action@taplo
 
-      - name: Run cargo clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Check unused dependencies (cargo machete)
+        run: cargo machete
 
-      - name: Run cargo test
-        run: cargo test --all-features
+      - name: Check TOML formatting (taplo)
+        run: taplo fmt --check --diff
+
+  docs:
+    name: Docs (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup update stable
+
+      - name: Setup rust-cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: false
 
       - name: Run cargo test --doc
         run: cargo test --all-features --doc
@@ -49,11 +113,4 @@ jobs:
       - name: Run cargo doc
         run: cargo doc --no-deps --all-features
 
-      - name: Check unused dependencies (cargo machete)
-        run: cargo machete
 
-      - name: Check formatting (cargo fmt)
-        run: cargo fmt --all --check
-
-      - name: Check TOML formatting (taplo)
-        run: taplo fmt --check --diff
