@@ -115,7 +115,15 @@ impl<T> RingBuffer<T> {
         // an initialized slot when reading, or to a slot that may be written
         // when writing. This helper performs unchecked indexing into the
         // backing slice using the internal mask.
-        unsafe { (&mut (*self.ptr)).get_unchecked_mut(idx & self.mask) }
+        //
+        // We use raw pointer arithmetic here to avoid creating a `&mut` reference
+        // to the entire backing array, which would cause aliasing issues in Miri
+        // when both producer and consumer threads call this method concurrently.
+        // Instead, we create a reference only to the specific element we need.
+        unsafe {
+            let base = self.ptr as *mut MaybeUninit<T>;
+            &mut *base.add(idx & self.mask)
+        }
     }
 }
 
